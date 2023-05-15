@@ -82,8 +82,8 @@ def account(request):
         'fname': user.first_name,
         'lname': user.last_name,
         'email': user.email,
-        'cash_available': 50.00,
-        'points': 0,
+        'cash_available': user.cash_available,
+        'points': user.points, 
     }
     return render(request, 'authentication/account.html', context)
 
@@ -97,7 +97,6 @@ def store(request):
     return render(request, 'shoppingpage/store.html', context)
 
 def cart(request):
-
     if request.user.is_authenticated:
         customer = request.user.customer
         order, created = Order.objects.get_or_create(customer=customer, complete=False)
@@ -113,8 +112,32 @@ def checkout(request):
         customer = request.user.customer
         order, created = Order.objects.get_or_create(customer=customer, complete=False)
         items = order.orderitem_set.all()
+
+        total_cost = 0
+        for item in items:
+            total_cost += item.product.price * item.quantity
+
+        user = request.user
+        cash_available = user.cash_available
+
+        if total_cost <= cash_available:
+            cash_available -= total_cost
+            user.cash_available = cash_available
+
+            if total_cost > 20:
+                user.points += 5
+
+            user.save()
+
+            order.complete = True
+            order.save()
+
+            messages.success(request, "Purchase successful!")
+            return redirect('home')
+        else:
+            messages.error(request, "Insufficient funds!")
+            return redirect('cart')
     else:
-        items = []
-        order = {'get_cart_total':0, 'get_cart_items':0}
-    context = {'items':items, 'order':order}
-    return render(request, 'shoppingpage/checkout.html', context)
+        return redirect('home')
+
+
